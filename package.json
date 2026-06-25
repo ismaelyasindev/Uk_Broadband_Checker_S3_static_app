@@ -1,0 +1,19 @@
+{
+  "name": "broadband-checker",
+  "private": true,
+  "description": "UK Broadband Checker monorepo (frontend + lambda)",
+  "workspaces": [
+    "frontend",
+    "lambda"
+  ],
+  "scripts": {
+    "dev": "npm run dev --workspace=frontend",
+    "build": "npm run build --workspace=frontend",
+    "preview": "npm run preview --workspace=frontend",
+    "test": "npm test --workspace=lambda",
+    "test:frontend": "npm test --workspace=frontend"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

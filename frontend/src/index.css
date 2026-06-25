@@ -1,0 +1,68 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  /* shadcn-compatible semantic tokens, derived from our paper/ink/flare palette. */
+  :root {
+    --background: 48 50% 97%;
+    --foreground: 248 13% 10%;
+    --popover: 48 50% 97%;
+    --popover-foreground: 248 13% 10%;
+    --primary: 326 75% 50%;
+    --primary-foreground: 48 50% 97%;
+    --muted: 47 18% 91%;
+    --muted-foreground: 249 5% 47%;
+    --accent: 47 18% 91%;
+    --accent-foreground: 248 13% 10%;
+    --border: 48 15% 89%;
+    --ring: 326 75% 50%;
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  html {
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  body {
+    @apply bg-paper text-ink font-sans antialiased;
+    /* Faint engineered dot-grid + two soft light pools, layered on paper. */
+    background-image:
+      radial-gradient(circle at 18% -10%, rgba(224, 33, 138, 0.06), transparent 45%),
+      radial-gradient(circle at 100% 0%, rgba(22, 21, 27, 0.05), transparent 38%),
+      radial-gradient(rgba(22, 21, 27, 0.05) 1px, transparent 1px);
+    background-size: auto, auto, 22px 22px;
+    background-attachment: fixed;
+    min-height: 100vh;
+  }
+
+  ::selection {
+    background-color: rgba(224, 33, 138, 0.18);
+    color: #16151b;
+  }
+
+  *:focus-visible {
+    @apply outline-none ring-2 ring-flare ring-offset-2;
+    --tw-ring-offset-color: #fbfaf5;
+  }
+}
+
+@layer components {
+  /* Tabular, instrument-like numerals for speeds and stats. */
+  .nums {
+    font-family: '"Space Grotesk"', 'Space Grotesk', sans-serif;
+    font-feature-settings: 'tnum' 1, 'lnum' 1;
+    letter-spacing: -0.02em;
+  }
+
+  /* Reusable hairline border that matches the paper aesthetic. */
+  .hairline {
+    border-color: rgba(22, 21, 27, 0.1);
+  }
+}

@@ -1,0 +1,71 @@
+{
+  "_meta": {
+    "description": "Demo-mode fixture database for the UK Broadband Checker. Keys are normalised postcodes (whitespace stripped, UPPERCASE). The frontend looks up entries by normalised key and falls back to `default` for unknown postcodes.",
+    "source": "Mock data — not affiliated with Ofcom."
+  },
+
+  "SW1A1AA": {
+    "postcode": "SW1A 1AA",
+    "place": "London — Buckingham Palace",
+    "scenario": "High-Speed Gigabit Network",
+    "maxDownloadMbps": 1000,
+    "maxUploadMbps": 220,
+    "technology": "FTTP",
+    "technologyLabel": "Fibre to the Premises",
+    "availabilityPercent": 100
+  },
+
+  "EH11YZ": {
+    "postcode": "EH1 1YZ",
+    "place": "Edinburgh — Old Town",
+    "scenario": "Medium-Speed Standard Broadband",
+    "maxDownloadMbps": 80,
+    "maxUploadMbps": 20,
+    "technology": "FTTC",
+    "technologyLabel": "Fibre to the Cabinet",
+    "availabilityPercent": 98
+  },
+
+  "LL574TH": {
+    "postcode": "LL57 4TH",
+    "place": "Bangor — Rural Wales",
+    "scenario": "Low-Speed Copper Legacy Network",
+    "maxDownloadMbps": 11,
+    "maxUploadMbps": 1,
+    "technology": "ADSL",
+    "technologyLabel": "Copper Asymmetric Digital Subscriber Line",
+    "availabilityPercent": 85
+  },
+
+  "PO301UD": {
+    "postcode": "PO30 1UD",
+    "place": "Newport — Isle of Wight",
+    "scenario": "No Coverage / Out of Service Area",
+    "maxDownloadMbps": 0,
+    "maxUploadMbps": 0,
+    "technology": "None",
+    "technologyLabel": "No infrastructure available",
+    "availabilityPercent": 0
+  },
+
+  "BT717BA": {
+    "postcode": "BT71 7BA",
+    "place": "Dungannon — Northern Ireland",
+    "scenario": "Simulated Upstream Gateway Error",
+    "error": {
+      "status": 502,
+      "message": "Service is temporarily unavailable, please try again later."
+    }
+  },
+
+  "default": {
+    "postcode": "",
+    "place": "Unknown area",
+    "scenario": "Generic estimate (postcode not in demo database)",
+    "maxDownloadMbps": 67,
+    "maxUploadMbps": 18,
+    "technology": "FTTC",
+    "technologyLabel": "Fibre to the Cabinet",
+    "availabilityPercent": 95
+  }
+}

@@ -1,0 +1,43 @@
+# Dependencies
+node_modules/
+
+# Frontend build output
+frontend/dist/
+frontend/dist-ssr/
+*.tsbuildinfo
+
+# Lambda artefacts & coverage
+lambda/coverage/
+*.zip
+
+# Environment files (never commit secrets)
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# Terraform
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+.terraform.lock.hcl
+
+# Local Ofcom open-data CSV drops (large; not part of the app runtime)
+202507_fixed_coverage_r01/
+202507_fixed_performance_r01/
+
+# Editor / OS
+.DS_Store
+.vscode/*
+!.vscode/extensions.json
+.idea
+*.swp
+*.swo
+
+# Logs
+*.log
+npm-debug.log*
+
+# Vitest / Vite cache
+**/.vite/
