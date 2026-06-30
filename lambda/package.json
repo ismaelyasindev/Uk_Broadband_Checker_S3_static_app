@@ -8,7 +8,8 @@
   "scripts": {
     "lint": "node --check src/handler.mjs",
     "test": "vitest run --coverage",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "dev:local": "node --env-file=.env.local scripts/local-api.mjs"
   },
   "dependencies": {
     "@aws-sdk/client-dynamodb": "^3.726.0",

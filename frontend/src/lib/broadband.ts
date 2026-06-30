@@ -1,4 +1,6 @@
 import axios from 'axios';
+import { apiCheckToBroadbandResult } from './apiCheck';
+import type { ApiCheckResponse } from './apiCheck';
 import { formatPostcode, normalizePostcode } from './postcode';
 import { LookupError } from '../types';
 import type {
@@ -8,7 +10,6 @@ import type {
 } from '../types';
 
 const API_URL = import.meta.env.VITE_API_URL;
-const ORIGIN_VERIFY_SECRET = import.meta.env.VITE_ORIGIN_VERIFY_SECRET;
 
 /** True when the app is configured to run entirely client-side from fixtures. */
 export const isDemoMode = API_URL === '/demo';
@@ -26,7 +27,6 @@ function loadDemoDb(): Promise<Record<string, DemoEntry>> {
         return res.json() as Promise<Record<string, DemoEntry>>;
       })
       .catch((err) => {
-        // Reset so a later retry can attempt the fetch again.
         demoDbPromise = null;
         throw err instanceof LookupError
           ? err
@@ -67,7 +67,6 @@ async function lookupDemo(rawPostcode: string): Promise<BroadbandResult> {
   const key = normalizePostcode(rawPostcode);
   const db = await loadDemoDb();
 
-  // Simulate realistic latency so loading states are visible in the demo.
   await new Promise((r) => setTimeout(r, 450));
 
   const entry = db[key] ?? db.default;
@@ -75,7 +74,6 @@ async function lookupDemo(rawPostcode: string): Promise<BroadbandResult> {
     throw new LookupError('No data available for this postcode.', 404);
   }
 
-  // A fixture entry may be flagged to simulate an upstream gateway failure.
   if (entry.error) {
     throw new LookupError(entry.error.message, entry.error.status);
   }
@@ -83,40 +81,42 @@ async function lookupDemo(rawPostcode: string): Promise<BroadbandResult> {
   return coerceResult(entry, formatPostcode(rawPostcode));
 }
 
-/** LIVE-MODE lookup: call the authenticated backend lookup endpoint. */
-async function lookupLive(rawPostcode: string): Promise<BroadbandResult> {
+/**
+ * LIVE-MODE lookup: call /api/check. CloudFront injects X-Origin-Verify on the
+ * origin request — the browser must not send that secret.
+ */
+async function lookupLive(
+  rawPostcode: string,
+  place?: string,
+): Promise<BroadbandResult> {
   const pc = normalizePostcode(rawPostcode);
 
   try {
-    const { data } = await axios.get<BroadbandResult>(
-      `${API_URL}/check`,
-      {
-        params: { pc },
-        timeout: 12000,
-        headers: ORIGIN_VERIFY_SECRET
-          ? { 'X-Origin-Verify': ORIGIN_VERIFY_SECRET }
-          : undefined,
-      },
-    );
-    return {
-      ...data,
-      technology: normalizeTechnology(data.technology),
-      postcode: data.postcode || formatPostcode(rawPostcode),
-    };
+    const { data } = await axios.get<ApiCheckResponse>(`${API_URL}/check`, {
+      params: { pc },
+      timeout: 12000,
+    });
+    const result = apiCheckToBroadbandResult(data, rawPostcode);
+    if (place) result.place = place;
+    return result;
   } catch (err) {
     if (axios.isAxiosError(err)) {
       const status = err.response?.status ?? 0;
+      const message =
+        (err.response?.data as { message?: string } | undefined)?.message ??
+        'Service is temporarily unavailable, please try again later.';
+
       if (status >= 500 || status === 0) {
-        throw new LookupError(
-          'Service is temporarily unavailable, please try again later.',
-          status || 503,
-        );
+        throw new LookupError(message, status || 503);
       }
       if (status === 404) {
         throw new LookupError('No data available for this postcode.', 404);
       }
       if (status === 403) {
         throw new LookupError('Access to the lookup service was denied.', 403);
+      }
+      if (status === 400) {
+        throw new LookupError(message, 400);
       }
     }
     throw new LookupError(
@@ -127,6 +127,11 @@ async function lookupLive(rawPostcode: string): Promise<BroadbandResult> {
 }
 
 /** Public entry point used by the UI. Routes to demo or live based on env. */
-export function fetchBroadband(rawPostcode: string): Promise<BroadbandResult> {
-  return isDemoMode ? lookupDemo(rawPostcode) : lookupLive(rawPostcode);
+export function fetchBroadband(
+  rawPostcode: string,
+  options?: { place?: string },
+): Promise<BroadbandResult> {
+  return isDemoMode
+    ? lookupDemo(rawPostcode)
+    : lookupLive(rawPostcode, options?.place);
 }

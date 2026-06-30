@@ -46,7 +46,9 @@ export default function App() {
     setResult(null);
     setErrorMessage('');
     try {
-      const data = await fetchBroadband(validated.postcode);
+      const data = await fetchBroadband(validated.postcode, {
+        place: validated.place,
+      });
       setResult(data);
       setStatus('success');
     } catch (err) {

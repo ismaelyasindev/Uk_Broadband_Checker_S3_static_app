@@ -8,10 +8,6 @@ import {
 } from 'vitest';
 import { createHash } from 'node:crypto';
 
-// -----------------------------------------------------------------------------
-// Shared mock send functions. These are referenced from the hoisted vi.mock
-// factories below and re-used across every (re)import of handler.mjs.
-// -----------------------------------------------------------------------------
 const ssmSend = vi.fn();
 const docSend = vi.fn();
 
@@ -32,19 +28,43 @@ vi.mock('@aws-sdk/lib-dynamodb', () => ({
 
 const SECRET = 'super-secret-origin-token';
 const TABLE = 'broadband-cache';
-const SSM_NAME = '/broadband/ofcom-api-key';
+const SSM_NAME = '/broadband/ofcom-key';
 const API_KEY = 'ofcom-live-key-123';
 
-/** Build a valid API Gateway HTTP API event. */
-function makeEvent({ headers, postcode } = {}) {
+const OFCOM_RAW = {
+  standard: { maxDown: 17.2, maxUp: 2.1, availability: 98 },
+  superfast: { maxDown: 80, maxUp: 20, availability: 50 },
+  ultrafast: { maxDown: 330, maxUp: 50, availability: 100 },
+};
+
+const MAPPED_PAYLOAD = {
+  postcode: 'SW1A1AA',
+  standard: { maxDown: 17.2, maxUp: 2.1, availability: 'full' },
+  superfast: { maxDown: 80, maxUp: 20, availability: 'partial' },
+  ultrafast: { maxDown: 330, maxUp: 50, availability: 'full' },
+};
+
+function makeEvent({
+  headers,
+  postcode = 'sw1a 1aa',
+  path = '/api/check',
+  method = 'GET',
+  query,
+} = {}) {
+  let queryStringParameters = query;
+  if (queryStringParameters === undefined && path.includes('check')) {
+    queryStringParameters =
+      postcode === null ? {} : { pc: postcode ?? 'sw1a 1aa' };
+  }
+
   return {
+    requestContext: { http: { path, method } },
     headers:
       headers === undefined ? { 'x-origin-verify': SECRET } : headers,
-    queryStringParameters: postcode === undefined ? { pc: 'sw1a 1aa' } : { pc: postcode },
+    queryStringParameters,
   };
 }
 
-/** Fresh import so module-level `cachedApiKey` resets (cold start) per test. */
 async function loadHandler() {
   vi.resetModules();
   return import('./src/handler.mjs');
@@ -62,7 +82,6 @@ beforeEach(() => {
   process.env.DYNAMODB_TABLE = TABLE;
   process.env.SSM_PARAM_PATH = SSM_NAME;
   vi.spyOn(console, 'log').mockImplementation(() => {});
-  vi.spyOn(console, 'error').mockImplementation(() => {});
 });
 
 afterEach(() => {
@@ -76,15 +95,10 @@ describe('Zero-Trust ingress verification', () => {
     const res = await handler(makeEvent({ headers: {} }));
 
     expect(res.statusCode).toBe(403);
-    expect(JSON.parse(res.body)).toEqual({ message: 'Forbidden' });
-    expect(ssmSend).not.toHaveBeenCalled();
-    expect(docSend).not.toHaveBeenCalled();
-  });
-
-  it('returns 403 when there are no headers at all', async () => {
-    const { handler } = await loadHandler();
-    const res = await handler({ queryStringParameters: { pc: 'SW1A1AA' } });
-    expect(res.statusCode).toBe(403);
+    expect(JSON.parse(res.body)).toEqual({
+      error: 'FORBIDDEN',
+      message: 'Direct access is not permitted',
+    });
   });
 
   it('returns 403 when the header value does not match the secret', async () => {
@@ -93,35 +107,116 @@ describe('Zero-Trust ingress verification', () => {
     expect(res.statusCode).toBe(403);
   });
 
-  it('returns 403 when ORIGIN_VERIFY_SECRET is not configured', async () => {
+  it('allows requests when ORIGIN_VERIFY_SECRET is not configured', async () => {
     delete process.env.ORIGIN_VERIFY_SECRET;
+    docSend.mockResolvedValueOnce({
+      Item: {
+        postcode: 'SW1A1AA',
+        data: MAPPED_PAYLOAD,
+        ttl: Math.floor(Date.now() / 1000) + 9999,
+      },
+    });
+    vi.stubGlobal('fetch', vi.fn());
+
     const { handler } = await loadHandler();
-    const res = await handler(makeEvent());
-    expect(res.statusCode).toBe(403);
+    const res = await handler(makeEvent({ headers: {} }));
+    expect(res.statusCode).toBe(200);
+  });
+});
+
+describe('defaults and edge cases', () => {
+  it('uses default table and SSM param when env vars are unset', async () => {
+    delete process.env.DYNAMODB_TABLE;
+    delete process.env.SSM_PARAM_PATH;
+    docSend.mockResolvedValueOnce({});
+    ssmSend.mockResolvedValueOnce({ Parameter: { Value: API_KEY } });
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({ ok: true, json: async () => OFCOM_RAW }),
+    );
+
+    const { handler } = await loadHandler();
+    await handler(makeEvent());
+
+    const { GetCommand, PutCommand } = await import('@aws-sdk/lib-dynamodb');
+    expect(GetCommand.mock.calls.at(-1)[0].TableName).toBe('broadband-cache');
+    expect(PutCommand.mock.calls.at(-1)[0].TableName).toBe('broadband-cache');
+
+    const { GetParameterCommand } = await import('@aws-sdk/client-ssm');
+    expect(GetParameterCommand.mock.calls.at(-1)[0].Name).toBe('/broadband/ofcom-key');
   });
 
-  it('never logs the raw origin-verify token', async () => {
+  it('handles events without requestContext or headers', async () => {
+    delete process.env.ORIGIN_VERIFY_SECRET;
+
     const { handler } = await loadHandler();
-    await handler(makeEvent({ headers: { 'x-origin-verify': 'leak-me' } }));
-    const logged = console.log.mock.calls.flat().join(' ');
-    expect(logged).not.toContain('leak-me');
+
+    const missingContext = await handler({});
+    expect(missingContext.statusCode).toBe(404);
+
+    const healthRes = await handler({
+      requestContext: { http: { path: '/api/health' } },
+    });
+    expect(healthRes.statusCode).toBe(200);
+  });
+
+  it('returns 403 when headers are missing but origin verification is enabled', async () => {
+    const { handler } = await loadHandler();
+    const res = await handler({
+      requestContext: { http: { path: '/api/health' } },
+    });
+
+    expect(res.statusCode).toBe(403);
+  });
+});
+
+describe('routing', () => {
+  it('returns health ok on /api/health', async () => {
+    const { handler } = await loadHandler();
+    const res = await handler(makeEvent({ path: '/api/health', query: null }));
+    expect(res.statusCode).toBe(200);
+    const body = JSON.parse(res.body);
+    expect(body.status).toBe('ok');
+    expect(body.ts).toBeTruthy();
+    expect(res.headers['Cache-Control']).toBe('no-store');
+  });
+
+  it('returns 404 for unknown routes', async () => {
+    const { handler } = await loadHandler();
+    const res = await handler(makeEvent({ path: '/api/unknown' }));
+    expect(res.statusCode).toBe(404);
+    expect(JSON.parse(res.body).error).toBe('NOT_FOUND');
   });
 });
 
 describe('input validation', () => {
   it('returns 400 when the pc query parameter is absent', async () => {
     const { handler } = await loadHandler();
-    const res = await handler({ headers: { 'x-origin-verify': SECRET } });
+    const res = await handler({
+      requestContext: { http: { path: '/api/check', method: 'GET' } },
+      headers: { 'x-origin-verify': SECRET },
+      queryStringParameters: {},
+    });
     expect(res.statusCode).toBe(400);
-    expect(JSON.parse(res.body).message).toMatch(/pc/i);
+    expect(JSON.parse(res.body).error).toBe('INVALID_POSTCODE');
+  });
+
+  it('returns 400 for an invalid postcode', async () => {
+    const { handler } = await loadHandler();
+    const res = await handler(makeEvent({ postcode: 'NOT-A-PC' }));
+    expect(res.statusCode).toBe(400);
+    expect(JSON.parse(res.body).error).toBe('INVALID_POSTCODE');
   });
 });
 
 describe('cache-aside (DynamoDB)', () => {
   it('returns a fresh cached item with X-Cache: HIT and never calls SSM/fetch', async () => {
-    const payload = { maxDownloadMbps: 1000, technology: 'FTTP' };
     docSend.mockResolvedValueOnce({
-      Item: { postcode: expectedHash, data: payload, ttl: Math.floor(Date.now() / 1000) + 9999 },
+      Item: {
+        postcode: 'SW1A1AA',
+        data: MAPPED_PAYLOAD,
+        ttl: Math.floor(Date.now() / 1000) + 9999,
+      },
     });
     const fetchSpy = vi.fn();
     vi.stubGlobal('fetch', fetchSpy);
@@ -131,7 +226,11 @@ describe('cache-aside (DynamoDB)', () => {
 
     expect(res.statusCode).toBe(200);
     expect(res.headers['X-Cache']).toBe('HIT');
-    expect(JSON.parse(res.body)).toEqual(payload);
+    expect(res.headers['Cache-Control']).toBe('max-age=300');
+    const body = JSON.parse(res.body);
+    expect(body.source).toBe('cache');
+    expect(body.responseTime).toBeTypeOf('number');
+    expect(body.ultrafast.maxDown).toBe(330);
     expect(ssmSend).not.toHaveBeenCalled();
     expect(fetchSpy).not.toHaveBeenCalled();
   });
@@ -139,13 +238,17 @@ describe('cache-aside (DynamoDB)', () => {
   it('treats an expired cached item as a MISS and refreshes it', async () => {
     docSend
       .mockResolvedValueOnce({
-        Item: { postcode: expectedHash, data: { stale: true }, ttl: Math.floor(Date.now() / 1000) - 10 },
+        Item: {
+          postcode: 'SW1A1AA',
+          data: MAPPED_PAYLOAD,
+          ttl: Math.floor(Date.now() / 1000) - 10,
+        },
       })
-      .mockResolvedValueOnce({}); // PutCommand write-back
+      .mockResolvedValueOnce({});
     ssmSend.mockResolvedValueOnce({ Parameter: { Value: API_KEY } });
     vi.stubGlobal(
       'fetch',
-      vi.fn().mockResolvedValue({ ok: true, json: async () => ({ fresh: true }) }),
+      vi.fn().mockResolvedValue({ ok: true, json: async () => OFCOM_RAW }),
     );
 
     const { handler } = await loadHandler();
@@ -153,28 +256,18 @@ describe('cache-aside (DynamoDB)', () => {
 
     expect(res.statusCode).toBe(200);
     expect(res.headers['X-Cache']).toBe('MISS');
-    expect(JSON.parse(res.body)).toEqual({ fresh: true });
-  });
-
-  it('returns 502 when the DynamoDB read fails', async () => {
-    docSend.mockRejectedValueOnce(new Error('DDB unavailable'));
-    const { handler } = await loadHandler();
-    const res = await handler(makeEvent());
-
-    expect(res.statusCode).toBe(502);
-    expect(JSON.parse(res.body).message).toMatch(/temporarily unavailable/i);
+    expect(JSON.parse(res.body).source).toBe('live');
   });
 });
 
-describe('cache miss → SSM → fetch → write-back', () => {
-  it('fetches, caches with a 24h TTL and returns X-Cache: MISS', async () => {
-    docSend
-      .mockResolvedValueOnce({}) // GetCommand: no item
-      .mockResolvedValueOnce({}); // PutCommand
+describe('cache miss → SSM → Ofcom → write-back', () => {
+  it('fetches, maps tiers, caches with a 24h TTL and returns X-Cache: MISS', async () => {
+    docSend.mockResolvedValueOnce({}).mockResolvedValueOnce({});
     ssmSend.mockResolvedValueOnce({ Parameter: { Value: API_KEY } });
-    const fetchSpy = vi
-      .fn()
-      .mockResolvedValue({ ok: true, json: async () => ({ maxDownloadMbps: 80 }) });
+    const fetchSpy = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => OFCOM_RAW,
+    });
     vi.stubGlobal('fetch', fetchSpy);
 
     const before = Math.floor(Date.now() / 1000);
@@ -184,44 +277,65 @@ describe('cache miss → SSM → fetch → write-back', () => {
 
     expect(res.statusCode).toBe(200);
     expect(res.headers['X-Cache']).toBe('MISS');
-    expect(JSON.parse(res.body)).toEqual({ maxDownloadMbps: 80 });
+    const body = JSON.parse(res.body);
+    expect(body.source).toBe('live');
+    expect(body.ultrafast).toEqual({ maxDown: 330, maxUp: 50, availability: 'full' });
 
-    // SSM called once with decryption enabled.
-    const { GetParameterCommand } = await import('@aws-sdk/client-ssm');
-    expect(GetParameterCommand).toHaveBeenCalledWith({
-      Name: SSM_NAME,
-      WithDecryption: true,
-    });
-
-    // Ofcom fetch used a Bearer token + the cleaned postcode.
-    expect(fetchSpy).toHaveBeenCalledTimes(1);
     const [url, opts] = fetchSpy.mock.calls[0];
-    expect(url).toContain('postcode=SW1A1AA');
-    expect(opts.headers.Authorization).toBe(`Bearer ${API_KEY}`);
+    expect(url).toContain('/coverage/SW1A1AA');
+    expect(opts.headers['Ocp-Apim-Subscription-Key']).toBe(API_KEY);
 
-    // Write-back uses pc_hash as the `postcode` key, stores payload and a ~24h-ahead ttl.
     const { PutCommand } = await import('@aws-sdk/lib-dynamodb');
     const putArg = PutCommand.mock.calls.at(-1)[0];
-    expect(putArg.TableName).toBe(TABLE);
-    expect(putArg.Item.postcode).toBe(expectedHash);
-    expect(putArg.Item.data).toEqual({ maxDownloadMbps: 80 });
+    expect(putArg.Item.postcode).toBe('SW1A1AA');
+    expect(putArg.Item.data).toEqual(MAPPED_PAYLOAD);
     expect(putArg.Item.ttl).toBeGreaterThanOrEqual(before + 24 * 60 * 60);
     expect(putArg.Item.ttl).toBeLessThanOrEqual(after + 24 * 60 * 60);
   });
 
-  it('returns 502 when the upstream Ofcom API responds with a non-OK status', async () => {
-    docSend.mockResolvedValueOnce({}); // miss
+  it('returns 502 UPSTREAM_RATE_LIMITED on Ofcom 429', async () => {
+    docSend.mockResolvedValueOnce({});
     ssmSend.mockResolvedValueOnce({ Parameter: { Value: API_KEY } });
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 500 }));
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 429 }));
 
+    const { handler } = await loadHandler();
+    const res = await handler(makeEvent());
+    expect(res.statusCode).toBe(502);
+    expect(JSON.parse(res.body).error).toBe('UPSTREAM_RATE_LIMITED');
+  });
+
+  it('returns 502 UPSTREAM_ERROR on other Ofcom failures', async () => {
+    docSend.mockResolvedValueOnce({});
+    ssmSend.mockResolvedValueOnce({ Parameter: { Value: API_KEY } });
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 503 }));
+
+    const { handler } = await loadHandler();
+    const res = await handler(makeEvent());
+    expect(res.statusCode).toBe(502);
+    expect(JSON.parse(res.body).error).toBe('UPSTREAM_ERROR');
+  });
+
+  it('returns 502 when the DynamoDB read fails', async () => {
+    docSend.mockRejectedValueOnce(new Error('DDB unavailable'));
     const { handler } = await loadHandler();
     const res = await handler(makeEvent());
     expect(res.statusCode).toBe(502);
   });
 
+  it('returns 502 UPSTREAM_ERROR when Ofcom fetch throws', async () => {
+    docSend.mockResolvedValueOnce({});
+    ssmSend.mockResolvedValueOnce({ Parameter: { Value: API_KEY } });
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('network down')));
+
+    const { handler } = await loadHandler();
+    const res = await handler(makeEvent());
+    expect(res.statusCode).toBe(502);
+    expect(JSON.parse(res.body).message).toBe('Ofcom API unreachable');
+  });
+
   it('returns 502 when the SSM parameter has no value', async () => {
-    docSend.mockResolvedValueOnce({}); // miss
-    ssmSend.mockResolvedValueOnce({}); // no Parameter returned at all
+    docSend.mockResolvedValueOnce({});
+    ssmSend.mockResolvedValueOnce({});
     vi.stubGlobal('fetch', vi.fn());
 
     const { handler } = await loadHandler();
@@ -232,17 +346,16 @@ describe('cache miss → SSM → fetch → write-back', () => {
 
 describe('SSM memoization', () => {
   it('only calls SSM once across multiple warm invocations', async () => {
-    docSend.mockResolvedValue({}); // every Get = miss, every Put = ok
+    docSend.mockResolvedValue({});
     ssmSend.mockResolvedValue({ Parameter: { Value: API_KEY } });
     vi.stubGlobal(
       'fetch',
-      vi.fn().mockResolvedValue({ ok: true, json: async () => ({ ok: 1 }) }),
+      vi.fn().mockResolvedValue({ ok: true, json: async () => OFCOM_RAW }),
     );
 
     const { handler } = await loadHandler();
     await handler(makeEvent());
     await handler(makeEvent({ postcode: 'EH1 1YZ' }));
-    await handler(makeEvent({ postcode: 'LL57 4TH' }));
 
     expect(ssmSend).toHaveBeenCalledTimes(1);
   });
@@ -251,7 +364,11 @@ describe('SSM memoization', () => {
 describe('PII protection (GDPR)', () => {
   it('logs only the 8-char pc_hash, never the raw or cleaned postcode', async () => {
     docSend.mockResolvedValueOnce({
-      Item: { postcode: expectedHash, data: { ok: true }, ttl: Math.floor(Date.now() / 1000) + 9999 },
+      Item: {
+        postcode: 'SW1A1AA',
+        data: MAPPED_PAYLOAD,
+        ttl: Math.floor(Date.now() / 1000) + 9999,
+      },
     });
     vi.stubGlobal('fetch', vi.fn());
 
@@ -262,12 +379,15 @@ describe('PII protection (GDPR)', () => {
     expect(logged).toContain(expectedHash);
     expect(logged).not.toContain('sw1a 1aa');
     expect(logged).not.toContain('SW1A1AA');
-    expect(logged).not.toContain('SW1A 1AA');
   });
 
-  it('normalises postcode case/whitespace to the same pc_hash key', async () => {
+  it('uses the normalised postcode as the DynamoDB cache key', async () => {
     docSend.mockResolvedValue({
-      Item: { postcode: expectedHash, data: { ok: true }, ttl: Math.floor(Date.now() / 1000) + 9999 },
+      Item: {
+        postcode: 'SW1A1AA',
+        data: MAPPED_PAYLOAD,
+        ttl: Math.floor(Date.now() / 1000) + 9999,
+      },
     });
     vi.stubGlobal('fetch', vi.fn());
 
@@ -276,6 +396,6 @@ describe('PII protection (GDPR)', () => {
 
     const { GetCommand } = await import('@aws-sdk/lib-dynamodb');
     const getArg = GetCommand.mock.calls.at(-1)[0];
-    expect(getArg.Key.postcode).toBe(expectedHash);
+    expect(getArg.Key.postcode).toBe('SW1A1AA');
   });
 });

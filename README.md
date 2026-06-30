@@ -23,7 +23,7 @@ broadband-checker/
 │   │   ├── main.tsx
 │   │   ├── types.ts
 │   │   └── index.css
-│   ├── .env / .env.example       # VITE_API_URL, VITE_ORIGIN_VERIFY_SECRET
+│   ├── .env / .env.example       # VITE_API_URL only (no secrets in the browser)
 │   ├── vite.config.ts            # content-hashed, CloudFront-safe build
 │   ├── tailwind.config.js
 │   └── package.json
@@ -52,8 +52,8 @@ npm run preview  # serve the production build
   the live `postcodes.io` API (autocomplete while typing + lookup on submit).
 - `VITE_API_URL=/api` — **Live mode** (production). Sends an authenticated
   request to `${VITE_API_URL}/check?pc=...` (i.e. `/api/check?pc=...` behind
-  CloudFront) with the `X-Origin-Verify` header set from
-  `VITE_ORIGIN_VERIFY_SECRET`.
+  CloudFront). The `X-Origin-Verify` header is injected by CloudFront on origin
+  requests — it is not set from the browser.
 
 All user input is normalised (whitespace stripped, UPPERCASED) before the demo
 JSON key lookup, so `"sw1a 1aa"`, `"Sw1a1Aa"`, and `"SW1A 1AA"` all match.
