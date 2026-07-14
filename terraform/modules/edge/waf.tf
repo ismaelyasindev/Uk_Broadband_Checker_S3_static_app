@@ -45,7 +45,7 @@ resource "aws_wafv2_web_acl" "main" {
 
         scope_down_statement {
           byte_match_statement {
-            search_string         = "/api/"
+            search_string = "/api/"
             field_to_match {
               uri_path {}
             }
@@ -84,7 +84,7 @@ resource "aws_wafv2_web_acl" "main" {
           not_statement {
             statement {
               byte_match_statement {
-                search_string         = "/api/"
+                search_string = "/api/"
                 field_to_match {
                   uri_path {}
                 }
@@ -123,7 +123,7 @@ resource "aws_wafv2_web_acl" "main" {
 
         scope_down_statement {
           byte_match_statement {
-            search_string         = "/api/"
+            search_string = "/api/"
             field_to_match {
               uri_path {}
             }

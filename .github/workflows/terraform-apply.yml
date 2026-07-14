@@ -1,0 +1,79 @@
+name: Terraform Apply
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: 'Type "apply-prod" to confirm'
+        required: true
+      target:
+        description: 'Optional: specific resource to target'
+        required: false
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    environment: production
+
+    steps:
+      - name: Validate confirmation
+        if: ${{ github.event.inputs.confirm != 'apply-prod' }}
+        run: |
+          echo "Confirmation input must be exactly 'apply-prod'. Got: '${{ github.event.inputs.confirm }}'"
+          exit 1
+
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: '~1.7'
+
+      - name: Configure AWS credentials (deploy OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: eu-west-2
+
+      - name: Terraform init
+        run: terraform -chdir=terraform/main init -input=false
+
+      - name: Terraform apply
+        run: |
+          TARGET_FLAG=""
+          if [ -n "${{ github.event.inputs.target }}" ]; then
+            TARGET_FLAG="-target=${{ github.event.inputs.target }}"
+          fi
+          terraform -chdir=terraform/main apply \
+            -var="ofcom_api_key=${{ secrets.OFCOM_API_KEY }}" \
+            -auto-approve $TARGET_FLAG
+
+      - name: Get CloudFront URL
+        id: cf_url
+        run: |
+          URL=$(terraform -chdir=terraform/main output -raw cloudfront_domain)
+          echo "url=https://$URL" >> $GITHUB_OUTPUT
+
+      - name: Smoke test — health endpoint
+        run: |
+          CF_URL="${{ steps.cf_url.outputs.url }}"
+          for i in 1 2 3; do
+            STATUS=$(curl -s -o /dev/null -w "%{http_code}" --max-time 15 "$CF_URL/api/health")
+            if [ "$STATUS" = "200" ]; then
+              echo "Smoke test passed (HTTP 200) on attempt $i"
+              exit 0
+            fi
+            echo "Attempt $i: got HTTP $STATUS — waiting 10 s"
+            sleep 10
+          done
+          echo "Smoke test failed after 3 attempts"
+          exit 1
+
+      - name: Post deployment summary
+        run: |
+          echo "## Deployment successful" >> $GITHUB_STEP_SUMMARY
+          echo "**CloudFront URL:** ${{ steps.cf_url.outputs.url }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Smoke test:** passed" >> $GITHUB_STEP_SUMMARY

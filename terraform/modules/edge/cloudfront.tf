@@ -77,7 +77,7 @@ resource "aws_cloudfront_distribution" "cdn" {
   price_class         = "PriceClass_100"
   default_root_object = "index.html"
   web_acl_id          = aws_wafv2_web_acl.main.arn
-  aliases         = [var.domain_name]
+  aliases             = [var.domain_name]
 
   origin {
     origin_id                = "S3Origin"
@@ -103,13 +103,13 @@ resource "aws_cloudfront_distribution" "cdn" {
   }
 
   ordered_cache_behavior {
-    path_pattern           = "/api/*"
-    target_origin_id       = "APIOrigin"
-    allowed_methods        = ["GET", "HEAD"]
-    cached_methods         = ["GET", "HEAD"]
-    compress               = true
-    viewer_protocol_policy = "redirect-to-https"
-    cache_policy_id        = aws_cloudfront_cache_policy.api.id
+    path_pattern             = "/api/*"
+    target_origin_id         = "APIOrigin"
+    allowed_methods          = ["GET", "HEAD"]
+    cached_methods           = ["GET", "HEAD"]
+    compress                 = true
+    viewer_protocol_policy   = "redirect-to-https"
+    cache_policy_id          = aws_cloudfront_cache_policy.api.id
     origin_request_policy_id = aws_cloudfront_origin_request_policy.api.id
   }
 

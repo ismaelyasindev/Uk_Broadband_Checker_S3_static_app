@@ -5,15 +5,15 @@ data "archive_file" "lambda" {
 }
 
 resource "aws_lambda_function" "broadband_checker" {
-  function_name                  = "broadband-checker"
-  role                           = aws_iam_role.lambda.arn
-  runtime                        = "nodejs20.x"
-  architectures                  = ["arm64"]
-  handler                        = "handler.handler"
-  filename                       = data.archive_file.lambda.output_path
-  source_code_hash               = data.archive_file.lambda.output_base64sha256
-  memory_size     = 256
-  timeout         = 10
+  function_name    = "broadband-checker"
+  role             = aws_iam_role.lambda.arn
+  runtime          = "nodejs20.x"
+  architectures    = ["arm64"]
+  handler          = "handler.handler"
+  filename         = data.archive_file.lambda.output_path
+  source_code_hash = data.archive_file.lambda.output_base64sha256
+  memory_size      = 256
+  timeout          = 10
 
   environment {
     variables = {

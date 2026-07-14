@@ -1,0 +1,63 @@
+name: Deploy Lambda
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'lambda/**'
+      - '.github/workflows/deploy-backend.yml'
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: production
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install production dependencies
+        run: cd lambda && npm ci --omit=dev
+
+      - name: Package Lambda
+        run: |
+          cd lambda/src
+          zip -r ../../lambda.zip . -x "*.test.*" "*.spec.*"
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: eu-west-2
+
+      - name: Preflight — ensure Lambda exists
+        run: |
+          aws lambda get-function --function-name broadband-checker >/dev/null 2>&1 \
+            || { echo "::error::Lambda not found — run terraform-apply before deploying backend"; exit 1; }
+
+      - name: Deploy Lambda
+        run: |
+          aws lambda update-function-code \
+            --function-name broadband-checker \
+            --zip-file fileb://lambda.zip \
+            --architectures arm64
+
+          aws lambda wait function-updated \
+            --function-name broadband-checker
+
+      - name: Smoke test (health endpoint)
+        run: |
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" --max-time 15 \
+            "https://${{ secrets.CLOUDFRONT_DOMAIN }}/api/health")
+          if [ "$STATUS" != "200" ]; then
+            echo "Health check failed with HTTP $STATUS"
+            exit 1
+          fi
+          echo "Health check passed (HTTP 200)"

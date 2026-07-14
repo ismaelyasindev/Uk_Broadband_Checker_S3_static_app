@@ -1,0 +1,51 @@
+name: Terraform Destroy
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: 'Type "destroy-prod" to confirm destruction'
+        required: true
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  destroy:
+    runs-on: ubuntu-latest
+    environment: production-destroy
+
+    steps:
+      - name: Validate confirmation string
+        if: ${{ github.event.inputs.confirm != 'destroy-prod' }}
+        run: |
+          echo "Must type exactly 'destroy-prod'. Got: '${{ github.event.inputs.confirm }}'"
+          exit 1
+
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: '~1.7'
+
+      - name: Configure AWS credentials (deploy OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: eu-west-2
+
+      - name: Terraform init
+        run: terraform -chdir=terraform/main init -input=false
+
+      - name: Terraform destroy
+        run: |
+          terraform -chdir=terraform/main destroy \
+            -var="ofcom_api_key=placeholder" \
+            -auto-approve
+
+      - name: Post destroy summary
+        run: |
+          echo "## Infrastructure destroyed" >> $GITHUB_STEP_SUMMARY
+          echo "State bucket and DynamoDB lock table **retained**." >> $GITHUB_STEP_SUMMARY
+          echo "Re-deploy at any time with terraform apply." >> $GITHUB_STEP_SUMMARY
