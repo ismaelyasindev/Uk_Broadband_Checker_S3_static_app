@@ -41,7 +41,7 @@ export function LoadingCard() {
 
 export function EmptyState() {
   return (
-    <div className="animate-fade-in flex flex-col items-center gap-3 rounded-3xl border border-dashed hairline bg-paper-card/50 px-6 py-12 text-center">
+    <div className="animate-fade-in flex flex-col items-center gap-2 rounded-3xl border border-dashed hairline bg-paper-card/50 px-6 py-8 text-center">
       <span className="grid h-12 w-12 place-items-center rounded-2xl border hairline bg-paper text-ink-mute">
         <SearchIcon className="h-5 w-5" />
       </span>

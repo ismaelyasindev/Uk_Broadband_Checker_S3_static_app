@@ -47,7 +47,7 @@ export default function App() {
     setErrorMessage('');
     try {
       const data = await fetchBroadband(validated.postcode, {
-        place: validated.place,
+        place: validated.place ?? undefined,
       });
       setResult(data);
       setStatus('success');
@@ -94,7 +94,7 @@ export default function App() {
       <main className="flex-1">
         {/* Hero — full-width live UK map with an overlaid search instrument. */}
         <section className="relative">
-          <div className="relative h-[460px] w-full overflow-hidden border-b hairline sm:h-[560px]">
+          <div className="relative h-[460px] w-full overflow-x-hidden border-b hairline sm:h-[560px]">
             <Suspense fallback={<MapSkeleton />}>
               <PostcodeMap target={mapTarget} />
             </Suspense>
@@ -114,7 +114,7 @@ export default function App() {
             </div>
 
             {/* Floating search card. */}
-            <div className="absolute inset-x-0 bottom-0 z-10 px-5 pb-8 sm:px-8 sm:pb-10">
+            <div className="absolute inset-x-0 bottom-0 z-30 px-5 pb-8 sm:px-8 sm:pb-10">
               <div className="mx-auto w-full max-w-3xl">
                 <div className="animate-fade-up rounded-3xl border hairline bg-paper-card/95 p-4 shadow-ring backdrop-blur-md sm:p-6">
                   <div className="mb-4 flex flex-col gap-1">
@@ -164,7 +164,13 @@ export default function App() {
         </section>
 
         {/* Results stack — kept narrow for readability under the wide hero. */}
-        <section className="mx-auto w-full max-w-5xl px-5 py-12 sm:px-8 sm:py-16">
+        <section
+          className={`mx-auto w-full max-w-5xl px-5 sm:px-8 ${
+            status === 'idle'
+              ? 'pt-4 pb-10 sm:pt-6 sm:pb-12'
+              : 'py-12 sm:py-16'
+          }`}
+        >
           {status === 'idle' && <EmptyState />}
           {status === 'loading' && <LoadingCard />}
           {status === 'error' && <ErrorBanner message={errorMessage} />}

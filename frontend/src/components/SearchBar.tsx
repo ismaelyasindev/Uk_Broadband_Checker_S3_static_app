@@ -146,6 +146,37 @@ export function SearchBar({ onValidated, busy }: SearchBarProps) {
             role="combobox"
             className="nums w-full rounded-2xl border hairline bg-paper py-4 pl-12 pr-4 text-base font-medium text-ink placeholder:font-sans placeholder:text-ink-mute/70 shadow-sm transition-all focus:border-flare/50 focus:bg-paper-card focus:shadow-lift"
           />
+
+          {open && suggestions.length > 0 && (
+            <ul
+              id={listboxId}
+              role="listbox"
+              className="animate-fade-in absolute bottom-full left-0 z-30 mb-2 max-h-56 w-full overflow-auto rounded-2xl border hairline bg-paper-card p-1.5 shadow-ring"
+            >
+              {suggestions.map((s, i) => (
+                <li key={s} role="option" aria-selected={i === activeIndex}>
+                  <button
+                    type="button"
+                    onMouseEnter={() => setActiveIndex(i)}
+                    onClick={() => {
+                      setQuery(s);
+                      void validateAndSubmit(s);
+                    }}
+                    className={`nums flex w-full items-center gap-2.5 rounded-xl px-3.5 py-2.5 text-left text-sm font-medium transition ${
+                      i === activeIndex
+                        ? 'bg-flare-soft text-flare-deep'
+                        : 'text-ink-soft hover:bg-paper-sunk'
+                    }`}
+                  >
+                    <SearchIcon
+                      className={`h-4 w-4 ${i === activeIndex ? 'text-flare' : 'opacity-40'}`}
+                    />
+                    {s}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
 
         <button
@@ -173,37 +204,6 @@ export function SearchBar({ onValidated, busy }: SearchBarProps) {
         <p role="alert" className="mt-3 flex items-center gap-1.5 text-sm font-medium text-red-600">
           {error}
         </p>
-      )}
-
-      {open && suggestions.length > 0 && (
-        <ul
-          id={listboxId}
-          role="listbox"
-          className="animate-fade-in absolute z-20 mt-2 max-h-64 w-full overflow-auto rounded-2xl border hairline bg-paper-card p-1.5 shadow-ring sm:w-[calc(100%-10rem)]"
-        >
-          {suggestions.map((s, i) => (
-            <li key={s} role="option" aria-selected={i === activeIndex}>
-              <button
-                type="button"
-                onMouseEnter={() => setActiveIndex(i)}
-                onClick={() => {
-                  setQuery(s);
-                  void validateAndSubmit(s);
-                }}
-                className={`nums flex w-full items-center gap-2.5 rounded-xl px-3.5 py-2.5 text-left text-sm font-medium transition ${
-                  i === activeIndex
-                    ? 'bg-flare-soft text-flare-deep'
-                    : 'text-ink-soft hover:bg-paper-sunk'
-                }`}
-              >
-                <SearchIcon
-                  className={`h-4 w-4 ${i === activeIndex ? 'text-flare' : 'opacity-40'}`}
-                />
-                {s}
-              </button>
-            </li>
-          ))}
-        </ul>
       )}
     </div>
   );

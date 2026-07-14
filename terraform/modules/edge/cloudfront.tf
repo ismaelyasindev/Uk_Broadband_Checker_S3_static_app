@@ -71,11 +71,12 @@ resource "aws_cloudfront_origin_request_policy" "api" {
 }
 
 resource "aws_cloudfront_distribution" "cdn" {
-  enabled         = true
-  is_ipv6_enabled = true
-  http_version    = "http2and3"
-  price_class     = "PriceClass_100"
-  web_acl_id      = aws_wafv2_web_acl.main.arn
+  enabled             = true
+  is_ipv6_enabled     = true
+  http_version        = "http2and3"
+  price_class         = "PriceClass_100"
+  default_root_object = "index.html"
+  web_acl_id          = aws_wafv2_web_acl.main.arn
   aliases         = [var.domain_name]
 
   origin {
