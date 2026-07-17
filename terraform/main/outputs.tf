@@ -18,3 +18,11 @@ output "s3_bucket" {
 output "cloudfront_domain" {
   value = module.edge.cloudfront_domain
 }
+
+output "dashboard_name" {
+  value = module.observability.dashboard_name
+}
+
+output "budget_name" {
+  value = module.observability.budget_name
+}
