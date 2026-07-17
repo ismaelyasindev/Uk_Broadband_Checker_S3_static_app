@@ -89,6 +89,7 @@ jobs:
             CKV_AWS_337,
             CKV_AWS_338,
             CKV_AWS_374,
+            CKV2_AWS_6,
             CKV2_AWS_31,
             CKV2_AWS_32,
             CKV2_AWS_47,
