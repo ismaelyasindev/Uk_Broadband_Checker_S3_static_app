@@ -7,7 +7,7 @@ variable "domain_name" {
 variable "alert_email" {
   type        = string
   description = "Email address for SNS alarm notifications"
-  default     = "you@example.com"
+  default     = "ismaelsusuyman@gmail.com"
 }
 
 variable "ofcom_api_key" {

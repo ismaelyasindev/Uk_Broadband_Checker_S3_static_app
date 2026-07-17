@@ -27,3 +27,18 @@ module "edge" {
     aws.us_east_1 = aws.us_east_1
   }
 }
+
+module "observability" {
+  source = "../modules/observability"
+
+  alert_email                = var.alert_email
+  cloudfront_distribution_id = module.edge.cloudfront_distribution_id
+  api_gateway_id             = module.origin.api_id
+  lambda_function_name       = module.origin.lambda_function_name
+  dynamodb_table_name        = module.origin.cache_table_name
+
+  providers = {
+    aws           = aws
+    aws.us_east_1 = aws.us_east_1
+  }
+}

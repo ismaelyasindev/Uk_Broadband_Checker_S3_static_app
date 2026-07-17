@@ -30,6 +30,10 @@ output "lambda_invoke_arn" {
   value = aws_lambda_function.broadband_checker.invoke_arn
 }
 
+output "api_id" {
+  value = aws_apigatewayv2_api.broadband.id
+}
+
 output "api_endpoint" {
   value = aws_apigatewayv2_api.broadband.api_endpoint
 }

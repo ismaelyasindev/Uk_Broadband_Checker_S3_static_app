@@ -1,4 +1,7 @@
 domain_name = "ismaelbroadband.online"
-alert_email = "you@example.com"
+alert_email = "ismaelsusuyman@gmail.com"
 github_org  = "ismaelyasindev"
 github_repo = "Uk_Broadband_Checker_S3_static_app"
+
+# After applying observability you will get two SNS confirmation emails
+# (eu-west-2 + us-east-1) — click Confirm on both.
