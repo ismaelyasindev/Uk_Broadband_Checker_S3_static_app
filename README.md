@@ -6,13 +6,14 @@
 
 <p align="center">
   <strong>Production-grade static app + API</strong> — provisioned entirely with Terraform,<br/>
-  secured with CloudFront + WAF + Zero-Trust origin headers, and shipped through GitHub Actions (OIDC — no long-lived AWS keys).
+  secured with CloudFront + WAF + Zero-Trust origin headers, and shipped through GitHub Actions (OIDC — no long-lived AWS keys).<br/>
+  <em>AWS infrastructure has been torn down; the recording and local demo mode remain.</em>
 </p>
 
 <p align="center">
-  <a href="https://ismaelbroadband.online/"><img src="https://img.shields.io/badge/Live-ismaelbroadband.online-E0218A?style=for-the-badge&logo=amazonaws&logoColor=white" alt="Live site" /></a>
-  <a href="https://ismaelbroadband.online/api/health"><img src="https://img.shields.io/badge/Health-/api/health-22C55E?style=for-the-badge&logo=statuspage&logoColor=white" alt="Health" /></a>
+  <img src="https://img.shields.io/badge/Status-Torn%20down%20%7C%20Demo%20mode-6B7280?style=for-the-badge" alt="Status" />
   <a href="https://github.com/ismaelyasindev/Uk_Broadband_Checker_S3_static_app/actions"><img src="https://img.shields.io/badge/CI%2FCD-GitHub%20Actions-2088FF?style=for-the-badge&logo=githubactions&logoColor=white" alt="Actions" /></a>
+  <img src="https://img.shields.io/badge/Live%20demo-Recorded-E0218A?style=for-the-badge" alt="Recorded demo" />
 </p>
 
 <p align="center">
@@ -165,6 +166,11 @@ GitHub Environments: **`production`** (deploys / apply) and **`production-destro
   <img src="docs/assets/terraform-apply.png" alt="Terraform Apply workflow succeeded" width="900" />
 </p>
 
+<p align="center"><strong>Terraform Destroy — production-destroy environment + typed confirmation</strong></p>
+<p align="center">
+  <img src="docs/assets/terraform-destroy.png" alt="Terraform Destroy workflow succeeded" width="900" />
+</p>
+
 ```mermaid
 flowchart LR
   A[Push / PR] --> B[CI]
@@ -177,6 +183,7 @@ flowchart LR
   H --> I[Smoke /api/health]
   E --> I
   F --> I
+  H --> J[Manual Terraform Destroy]
 ```
 
 ---
@@ -270,6 +277,28 @@ main push (lambda/**)    →  zip lambda/src           →  update-function-code
 
 ---
 
+## Teardown
+
+After the live showcase window, the stack was destroyed with the gated **`terraform-destroy.yml`** workflow (`confirm=destroy-prod`, `production-destroy` environment).
+
+| Destroyed | Retained (by design) |
+|-----------|----------------------|
+| CloudFront, WAF, ACM, Route 53 aliases | Terraform **state bucket** (`prevent_destroy`) |
+| S3 static + logs buckets | DynamoDB **state lock** table |
+| API Gateway, Lambda, DynamoDB cache, SSM | GitHub OIDC provider + IAM roles (bootstrap) |
+| CloudWatch dashboard, alarms, SNS, budget | Repo, docs, recordings, demo mode |
+
+Re-deploy any time:
+
+```bash
+cd terraform/main
+terraform init
+terraform apply -var="ofcom_api_key=<OFCOM_KEY>"
+# then deploy frontend + lambda via Actions or two-pass S3 sync
+```
+
+---
+
 ## Run locally (no AWS required)
 
 Demo mode is the recruiter / teardown story — full UI without cloud spend:
@@ -299,19 +328,21 @@ Designed to stay near **free-tier / low dollars**:
 
 ---
 
-## Live verification
+## Live verification (while deployed)
 
 ```bash
 curl -s https://ismaelbroadband.online/api/health
 # {"status":"ok","ts":"..."}
 ```
 
-| Check | Expected |
+| Check | Expected (when live) |
 |-------|----------|
-| https://ismaelbroadband.online | App loads over HTTPS (ACM) |
+| Custom domain HTTPS | App loads (ACM + CloudFront) |
 | Postcode lookup | Results + map pin |
 | Repeat lookup | Faster path via DynamoDB cache |
-| GitHub Actions | CI / Plan / Apply / Deploy green |
+| GitHub Actions | CI / Plan / Apply / Deploy / Destroy green |
+
+> Infrastructure is currently **destroyed**. Use the GIF above and `npm run dev` in demo mode for the persistent portfolio experience.
 
 ---
 
