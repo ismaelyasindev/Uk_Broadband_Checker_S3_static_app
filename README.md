@@ -157,12 +157,12 @@ GitHub Environments: **`production`** (deploys / apply) and **`production-destro
 
 <p align="center"><strong>Terraform Plan — OIDC read-only role on PR</strong></p>
 <p align="center">
-  <img src="docs/assets/terraform-plan.jpg" alt="Terraform Plan workflow succeeded" width="900" />
+  <img src="docs/assets/terraform-plan.png" alt="Terraform Plan workflow succeeded" width="900" />
 </p>
 
 <p align="center"><strong>Terraform Apply — deploy role + smoke test</strong></p>
 <p align="center">
-  <img src="docs/assets/terraform-apply.jpg" alt="Terraform Apply workflow succeeded" width="900" />
+  <img src="docs/assets/terraform-apply.png" alt="Terraform Apply workflow succeeded" width="900" />
 </p>
 
 ```mermaid
@@ -178,6 +178,30 @@ flowchart LR
   E --> I
   F --> I
 ```
+
+---
+
+## Observability
+
+CloudWatch dashboard **`broadband-checker`** (`eu-west-2`) — one screen for edge, origin, alarms, and cache behaviour. Alarms notify via SNS email; a **$20** AWS Budget watches forecasted spend.
+
+| Signal | What it shows |
+|--------|----------------|
+| CloudFront / WAF | Requests, 4xx/5xx rates, blocked requests (`us-east-1` metrics) |
+| Lambda | Invocations, errors, p50/p95/p99 duration, throttles & concurrency |
+| DynamoDB / API Gateway | Throttle events, latency, 4xx/5xx |
+| Active Alarms | Green/red status for the full alarm set |
+| Cache hit ratio | Logs Insights pie from Lambda `source` (`cache` vs `live`) |
+
+<p align="center"><strong>1 — CloudWatch dashboard overview</strong></p>
+<p align="center">
+  <img src="docs/assets/cloudwatch-dashboard.jpg" alt="CloudWatch broadband-checker dashboard overview" width="900" />
+</p>
+
+<p align="center"><strong>2 — DynamoDB, API Gateway, and cache hit ratio</strong></p>
+<p align="center">
+  <img src="docs/assets/cloudwatch-dashboard-detail.jpg" alt="CloudWatch dashboard detail widgets" width="900" />
+</p>
 
 ---
 
