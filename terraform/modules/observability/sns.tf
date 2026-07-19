@@ -32,8 +32,18 @@ resource "aws_sns_topic_policy" "alerts_budgets" {
         Sid       = "AllowAccountOwner"
         Effect    = "Allow"
         Principal = { AWS = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:root" }
-        Action    = "SNS:*"
-        Resource  = aws_sns_topic.alerts.arn
+        Action = [
+          "SNS:GetTopicAttributes",
+          "SNS:SetTopicAttributes",
+          "SNS:AddPermission",
+          "SNS:RemovePermission",
+          "SNS:DeleteTopic",
+          "SNS:Subscribe",
+          "SNS:ListSubscriptionsByTopic",
+          "SNS:Publish",
+          "SNS:Receive",
+        ]
+        Resource = aws_sns_topic.alerts.arn
       },
       {
         Sid       = "AllowBudgetsPublish"
